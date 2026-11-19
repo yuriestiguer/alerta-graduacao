@@ -1,7 +1,7 @@
 # ALERTA DE GRADUAÇÃO — meme lançado com uma "moeda de lançamento" de par (ação tokenizada, outro meme, token)
 # Como detecta: lê na blockchain (RPC público, getProgramAccounts) as pools da PumpSwap cujo par (quote) é cada
 # moeda vigiada. Pool que aparece entre duas leituras = meme acabou de graduar (saiu da curva da pump.fun).
-# Lista de moedas vigiadas se atualiza sozinha 1x/dia: varre TODAS as pools da PumpSwap e pega toda moeda usada
+# Lista de moedas vigiadas se atualiza sozinha a cada ~6h: varre TODAS as pools da PumpSwap e pega toda moeda usada
 # como par em >= 5 pools (fora SOL/USDC/USDT/USD1, que são o mercado de memes inteiro).
 # Avisa nas primeiras 24h (US$250k em 1h / US$1M em 24h) e REGISTRA até 72h p/ medir explosão tardia.
 # Toda segunda manda resumo da semana. Só LEITURA: não tem chave de carteira, não mexe em dinheiro.
@@ -138,8 +138,8 @@ msgs = []
 for r in json.load(open(os.path.join(here, "acoes.json"), encoding="utf-8")):   # sementes: sempre vigiadas
     est["quotes"].setdefault(r["mint"], {"sym": r["sym"], "tipo": "acao", "base_ok": False, "desde": agora})
 
-# ---------------- varredura diária: atualiza a lista de moedas usadas como par
-if args.forcar_varredura or agora - est["varredura"]["ultima"] >= 23.5 * H:
+# ---------------- varredura a cada ~6h: atualiza a lista de moedas usadas como par
+if args.forcar_varredura or agora - est["varredura"]["ultima"] >= 5.5 * H:
     cont = varredura_completa()
     if cont is None: print("varredura falhou (tenta na próxima rodada)", file=sys.stderr)
     else:
@@ -150,7 +150,7 @@ if args.forcar_varredura or agora - est["varredura"]["ultima"] >= 23.5 * H:
             sym, nome = nomes.get(m, (m[:6], ""))
             est["quotes"][m] = {"sym": sym, "nome": nome, "tipo": tipo_por_nome(sym, nome), "base_ok": False, "desde": agora}
         for m, q in est["quotes"].items():
-            if ant and cont.get(m, 0) > ant.get(m, 0): q["ultima_nova"] = agora     # ganhou meme novo desde ontem
+            if ant and cont.get(m, 0) > ant.get(m, 0): q["ultima_nova"] = agora     # ganhou meme novo desde a última varredura
             q["npools"] = cont.get(m, 0)
         est["varredura"] = {"ultima": agora, "contagem": {m: n for m, n in cont.items() if n >= 2},
                             "total_pools": sum(cont.values())}
