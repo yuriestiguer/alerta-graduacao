@@ -1,7 +1,10 @@
 name: alerta-graduacao
+# "Plantão": cada execução roda a verificação a cada 10 min por ~5h30 e, ao terminar, chama a próxima.
+# Motivo: o agendamento (cron) do GitHub não disparou neste repositório em 19/11/2026.
+# O cron fica só como reserva; a tarefa "Cripto_Alerta_Guardiao" no PC do Yuri religa se o plantão cair.
 on:
   schedule:
-    - cron: "3-59/10 * * * *"
+    - cron: "3 */2 * * *"
   workflow_dispatch:
 concurrency:
   group: alerta
@@ -10,9 +13,9 @@ permissions:
   contents: read
   actions: write
 jobs:
-  rodar:
+  plantao:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 350
     steps:
       - uses: actions/checkout@v4
       - uses: actions/cache/restore@v4
@@ -20,16 +23,24 @@ jobs:
           path: estado
           key: estado-${{ github.run_id }}
           restore-keys: estado-
-      - run: python3 alerta_graduacao.py --enviar
+      - name: verifica a cada 10 min por ~5h30
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           PYTHONIOENCODING: utf-8
-      - id: hora
+        run: |
+          fim=$((SECONDS + 330*60))
+          while [ $SECONDS -lt $fim ]; do
+            ini=$SECONDS
+            echo "::group::rodada $(date -u +%H:%M)"
+            python3 alerta_graduacao.py --enviar || echo "rodada falhou (segue no próximo ciclo)"
+            echo "::endgroup::"
+            resto=$((600 - (SECONDS - ini)))
+            [ $resto -gt 0 ] && [ $((SECONDS + resto)) -lt $fim ] && sleep $resto || true
+            [ $((SECONDS + 600)) -ge $fim ] && break
+          done
+      - name: backup do registro (90 dias)
         if: always()
-        run: echo "backup=$( [ "$(date -u +%H%M)" \< "0010" ] && echo sim || echo nao )" >> "$GITHUB_OUTPUT"
-      - name: backup diário do registro (90 dias)
-        if: always() && (steps.hora.outputs.backup == 'sim' || github.event_name == 'workflow_dispatch')
         uses: actions/upload-artifact@v4
         with:
           name: estado-${{ github.run_id }}
@@ -40,9 +51,10 @@ jobs:
         with:
           path: estado
           key: estado-${{ github.run_id }}
-      - name: renova programação (GitHub desliga após 60 dias sem atividade)
-        if: github.event.schedule && always()
+      - name: chama o próximo plantão
+        if: ${{ !cancelled() }}
         run: |
-          if [ "$(date -u +%H%M)" \< "0010" ]; then
-            curl -s -X PUT -H "Authorization: Bearer ${{ github.token }}"               https://api.github.com/repos/${{ github.repository }}/actions/workflows/alerta.yml/enable
-          fi
+          curl -s -o /dev/null -w "dispatch %{http_code}\n" -X POST -H "Authorization: Bearer ${{ github.token }}" \
+            https://api.github.com/repos/${{ github.repository }}/actions/workflows/alerta.yml/dispatches -d '{"ref":"main"}'
+          curl -s -o /dev/null -X PUT -H "Authorization: Bearer ${{ github.token }}" \
+            https://api.github.com/repos/${{ github.repository }}/actions/workflows/alerta.yml/enable
