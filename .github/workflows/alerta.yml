@@ -33,6 +33,7 @@ jobs:
           while [ $SECONDS -lt $fim ]; do
             ini=$SECONDS
             echo "::group::rodada $(date -u +%H:%M)"
+            git pull -q --ff-only || true    # pega ajustes do robô sem esperar o próximo plantão
             python3 alerta_graduacao.py --enviar || echo "rodada falhou (segue no próximo ciclo)"
             echo "::endgroup::"
             resto=$((600 - (SECONDS - ini)))
