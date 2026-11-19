@@ -12,7 +12,7 @@ permissions:
 jobs:
   rodar:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/cache/restore@v4
@@ -25,6 +25,16 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           PYTHONIOENCODING: utf-8
+      - id: hora
+        if: always()
+        run: echo "backup=$( [ "$(date -u +%H%M)" \< "0010" ] && echo sim || echo nao )" >> "$GITHUB_OUTPUT"
+      - name: backup diário do registro (90 dias)
+        if: always() && (steps.hora.outputs.backup == 'sim' || github.event_name == 'workflow_dispatch')
+        uses: actions/upload-artifact@v4
+        with:
+          name: estado-${{ github.run_id }}
+          path: estado
+          retention-days: 90
       - uses: actions/cache/save@v4
         if: always()
         with:
