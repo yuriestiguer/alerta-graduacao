@@ -28,6 +28,7 @@ H = 3600
 AVISA_ATE_H = 24                  # só manda aviso nas primeiras 24h do meme
 REGISTRA_ATE_H = 72               # mas registra o volume até 72h (p/ decidir se vale estender)
 NIVEIS = [("vol1h", 250_000, "🔥 US$250 mil em 1h"), ("vol24", 1_000_000, "🚀 US$1 milhão em 24h")]
+MIN_LIQ, MIN_MERCADO = 20_000, 50_000   # trava 19/11: abaixo disso o meme já morreu (ex.: NEKOMARIO) → não avisa
 PROMOVE_MEME = 1_000_000          # meme c/ ≥ US$1M/24h vira moeda vigiada na hora (sem esperar a varredura)
 MIN_POOLS = 5                     # varredura diária: moeda usada como par em ≥ 5 pools entra na lista
 ATIVA_DIAS = 7                    # moeda (não-ação) só é lida a cada 10 min se ganhou meme novo nos últimos 7 dias
@@ -187,12 +188,14 @@ for a in seg:
     mx = pl.setdefault("max24", [0, 0, 0]); mx[dia] = max(mx[dia], v.get("h24") or 0)
     pl["max1h"] = max(pl.get("max1h", 0), v.get("h1") or 0)
     pl["sym"] = p["baseToken"]["symbol"]
+    vivo = ((p.get("liquidity") or {}).get("usd") or 0) >= MIN_LIQ and (p.get("fdv") or 0) >= MIN_MERCADO
     for chave, lim, tit in NIVEIS:
         val = v.get("h1") if chave == "vol1h" else v.get("h24")
         if (val or 0) >= lim and chave not in pl["avisos"] and chave + "_tarde" not in pl["avisos"]:
+            if not vivo: pl["barrado"] = 1; continue            # bateu a meta mas já morreu: não avisa (pode avisar se reviver)
             if idade_h < AVISA_ATE_H: msgs.append(mensagem(tit, pl, q, p)); pl["avisos"].append(chave)
             else: pl["avisos"].append(chave + "_tarde")        # só registra (entra no resumo semanal)
-    if (v.get("h24") or 0) >= PROMOVE_MEME and pl["base"] not in est["quotes"] and pl["base"] not in EXCLUI:
+    if vivo and (v.get("h24") or 0) >= PROMOVE_MEME and pl["base"] not in est["quotes"] and pl["base"] not in EXCLUI:
         est["quotes"][pl["base"]] = {"sym": p["baseToken"]["symbol"], "tipo": "meme", "base_ok": False, "desde": agora}
         msgs.append(f"➕ {p['baseToken']['symbol']} passou a ser vigiado como moeda de lançamento (memes lançados com ele de par)")
 
