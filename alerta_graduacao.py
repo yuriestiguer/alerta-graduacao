@@ -21,7 +21,7 @@ RPC = os.environ.get("SOLANA_RPC", "https://api.mainnet-beta.solana.com")
 PUMPSWAP = "pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA"
 OFF_BASE, OFF_QUOTE = 43, 75
 ACOMPANHA_H = 24
-NIVEIS = [("vol1h", 100_000, "🔥 US$100 mil em 1h"), ("vol24", 1_000_000, "🚀 US$1 milhão em 24h")]
+NIVEIS = [("vol1h", 250_000, "🔥 US$250 mil em 1h"), ("vol24", 1_000_000, "🚀 US$1 milhão em 24h")]
 PROMOVE_MEME = 1_000_000          # meme c/ ≥ US$1M/24h vira "moeda de lançamento" vigiada
 # ações onde a pool da Meteora PEGOU taxa no estudo de 18/11 (estratégia 3). Resto = só estratégia 2.
 CAPTA = {"AMD", "AVGOx", "ANTHROPIC", "TTWO", "ANDURIL", "NEURALINK", "POLYMARKET", "NVDAx", "DJT"}
@@ -137,7 +137,7 @@ for pl in est["pools"].values():
     if pl["acompanha"] and agora - pl["visto"] >= ACOMPANHA_H * 3600: pl["acompanha"] = False
 json.dump(est, open(EST, "w", encoding="utf-8"))
 print(f"quotes vigiadas {len(est['quotes'])} · pools conhecidas {len(est['pools'])} · novas nesta leitura {novos} · mensagens {len(msgs)}", file=sys.stderr)
-if primeira_vez: msgs.insert(0, f"✅ Alerta de memes ligado: vigiando {len(est['quotes'])} ações tokenizadas ({len(est['pools'])} memes já graduados registrados). Aviso quando um meme novo passar de US$100 mil em 1h ou US$1 milhão em 24h.")
+if primeira_vez: msgs.insert(0, f"✅ Alerta de memes ligado: vigiando {len(est['quotes'])} ações tokenizadas ({len(est['pools'])} memes já graduados registrados). Aviso quando um meme novo passar de US$250 mil em 1h ou US$1 milhão em 24h.")
 for m in msgs:
     print("-----\n" + m)
     if args.enviar: telegram(m); time.sleep(1)
