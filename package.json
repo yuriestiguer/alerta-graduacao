@@ -1,0 +1,9 @@
+{
+  "name": "alerta-fotos",
+  "private": true,
+  "type": "commonjs",
+  "dependencies": {
+    "@meteora-ag/dlmm": "1.9.14",
+    "@solana/web3.js": "^1.99.0"
+  }
+}

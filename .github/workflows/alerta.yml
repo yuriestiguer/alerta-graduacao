@@ -23,6 +23,11 @@ jobs:
           path: estado
           key: estado-${{ github.run_id }}
           restore-keys: estado-
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: instala leitor de degraus (fotos)
+        run: npm install --no-audit --no-fund --silent || echo "npm falhou: fotos desligadas neste plantão"
       - name: verifica a cada 10 min por ~5h30
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
@@ -35,6 +40,7 @@ jobs:
             echo "::group::rodada $(date -u +%H:%M)"
             git pull -q --ff-only || true    # pega ajustes do robô sem esperar o próximo plantão
             python3 alerta_graduacao.py --enviar || echo "rodada falhou (segue no próximo ciclo)"
+            [ -f fotos.py ] && { timeout 300 python3 fotos.py || echo "fotos falharam (alarme segue normal)"; }
             echo "::endgroup::"
             resto=$((600 - (SECONDS - ini)))
             [ $resto -gt 0 ] && [ $((SECONDS + resto)) -lt $fim ] && sleep $resto || true
@@ -47,6 +53,14 @@ jobs:
           name: estado-${{ github.run_id }}
           path: estado
           retention-days: 90
+      - name: backup das fotos dos degraus (90 dias)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fotos-${{ github.run_id }}
+          path: fotos
+          retention-days: 90
+          if-no-files-found: ignore
       - uses: actions/cache/save@v4
         if: always()
         with:
