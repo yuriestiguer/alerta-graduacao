@@ -27,7 +27,8 @@ jobs:
         with:
           node-version: 20
       - name: instala leitor de degraus (fotos)
-        run: npm install --no-audit --no-fund --silent || echo "npm falhou: fotos desligadas neste plantão"
+        run: |
+          npm install --no-audit --no-fund --silent || echo "npm falhou - fotos desligadas neste plantão"
       - name: verifica a cada 10 min por ~5h30
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
