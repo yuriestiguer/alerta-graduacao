@@ -100,7 +100,29 @@ def tipo_por_nome(sym, nome):
 def dlmm_do_meme(meme_mint):
     d = http(f"https://api.dexscreener.com/token-pairs/v1/solana/{meme_mint}") or []
     r = [p for p in d if p.get("dexId") == "meteora" and "DLMM" in (p.get("labels") or [])]
-    return [(f'{p["baseToken"]["symbol"]}/{p["quoteToken"]["symbol"]}', (p.get("liquidity") or {}).get("usd") or 0) for p in r]
+    out = [{"nome": f'{p["baseToken"]["symbol"]}/{p["quoteToken"]["symbol"]}', "addr": p["pairAddress"],
+            "liq": (p.get("liquidity") or {}).get("usd") or 0, "v1h": (p.get("volume") or {}).get("h1") or 0} for p in r]
+    return sorted(out, key=lambda x: -x["v1h"])
+
+# Veredito automático (25/11, pedido do Yuri) — regras PROVISÓRIAS do teste com dinheiro real, a calibrar c/ o estudo:
+VER_QUEDA_1H, VER_QUEDA_5M = -30, -15      # preço da pool principal caindo mais que isso → não entra
+VER_DLMM_VOL1H = 2_000                     # pool DLMM precisa ter negócio na última hora (senão não há taxa)
+VER_DLMM_SALDO = 1_000                     # e saldo mínimo (simulação: pools de US$30–100 renderam ~0 de taxa; US$50 viraria metade da pool)
+def bloco_veredito(meme_mint, var5m, var1h):
+    dl = dlmm_do_meme(meme_mint)
+    linhas = [f"moeda (colar na busca, NÃO buscar pelo nome): {meme_mint}"]
+    for x in dl[:3]:
+        linhas.append(f"• DLMM {x['nome']} · saldo {usd(x['liq'])} · volume 1h {usd(x['v1h'])} → https://app.meteora.ag/dlmm/{x['addr']}")
+    if not dl: linhas.append("• nenhuma pool DLMM do meme na Meteora")
+    nao = []
+    if var1h is not None and var1h <= VER_QUEDA_1H: nao.append(f"preço caiu {var1h:.0f}% na última hora")
+    if var5m is not None and var5m <= VER_QUEDA_5M: nao.append(f"preço caindo {var5m:.0f}% nos últimos 5 min")
+    boas = [x for x in dl if x["liq"] >= VER_DLMM_SALDO and x["v1h"] >= VER_DLMM_VOL1H]
+    if not dl: nao.append("sem pool DLMM na Meteora")
+    elif not boas: nao.append(f"nenhuma pool DLMM com saldo ≥ {usd(VER_DLMM_SALDO)} e volume ≥ {usd(VER_DLMM_VOL1H)} na última hora")
+    if nao: linhas.append("❌ NÃO ENTRA: " + "; ".join(nao))
+    else: linhas.append(f"✅ PASSA NO FILTRO → pool {boas[0]['nome']} https://app.meteora.ag/dlmm/{boas[0]['addr']}\nReceita: US$50, faixa −50%/+50% Spot, sair em 1h. Conferir o endereço da moeda e print antes de aprovar.")
+    return linhas
 
 def usd(v):
     v = v or 0
@@ -118,9 +140,9 @@ def mensagem(titulo, pl, q, p):
         v = p.get("volume") or {}
         idade = (time.time() - (p.get("pairCreatedAt") or time.time() * 1000) / 1000) / 3600
         linhas.append(f"volume 1h {usd(v.get('h1'))} · 24h {usd(v.get('h24'))} · liquidez {usd((p.get('liquidity') or {}).get('usd'))} · valor de mercado {usd(p.get('fdv'))} · {idade:.1f}h de PumpSwap")
-        linhas.append(p.get("url", ""))
-    dl = dlmm_do_meme(pl["base"])
-    linhas.append("DLMM do meme na Meteora: " + ("; ".join(f"{n} {usd(l)}" for n, l in dl) if dl else "NENHUMA ainda (vaga p/ ser a 1ª ponte)"))
+        linhas.append(f"gráfico: https://dexscreener.com/solana/{p['pairAddress']}")
+    pc = (p or {}).get("priceChange") or {}
+    linhas += bloco_veredito(pl["base"], pc.get("m5"), pc.get("h1"))
     return "\n".join(linhas)
 
 def telegram(txt):
@@ -221,12 +243,11 @@ try:
                 if not vivo: reg["barrado"] = 1; continue
                 reg["avisos"].append(chave)
                 meme_mint = bid.split("_", 1)[-1]
-                dl = dlmm_do_meme(meme_mint)
                 msgs.append("\n".join([
                     f"{tit}: {b.get('symbol', '?')} / {qq.get('symbol', '?')}  [StonkFun → vai p/ Raydium, não PumpSwap]",
                     f"volume 1h {usd(v1)} · 24h {usd(v24)} · liquidez {usd(liq)} · valor de mercado {usd(fdv)} · {idade_h:.1f}h de vida",
-                    f"https://www.geckoterminal.com/solana/pools/{a['address']}",
-                    "DLMM do meme na Meteora: " + ("; ".join(f"{n} {usd(l)}" for n, l in dl) if dl else "NENHUMA ainda")]))
+                    f"gráfico: https://www.geckoterminal.com/solana/pools/{a['address']}",
+                    ] + bloco_veredito(meme_mint, *(float((a.get("price_change_percentage") or {}).get(k) or 0) for k in ("m5", "h1")))))
     for k in [k for k, x in sf.items() if agora - x.get("t0", agora) > 7 * 86400]: del sf[k]   # registro curto (7 dias)
 except Exception as e:
     print(f"StonkFun: leitura falhou ({e}) — segue sem", file=sys.stderr)
