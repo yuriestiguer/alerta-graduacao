@@ -199,6 +199,38 @@ for a in seg:
         est["quotes"][pl["base"]] = {"sym": p["baseToken"]["symbol"], "tipo": "meme", "base_ok": False, "desde": agora}
         msgs.append(f"➕ {p['baseToken']['symbol']} passou a ser vigiado como moeda de lançamento (memes lançados com ele de par)")
 
+# ---------------- StonkFun (25/11, pedido do Yuri): memes que nascem lá vão p/ a Raydium, não p/ a PumpSwap → a varredura acima não vê.
+# Barato: 1 consulta ao GeckoTerminal por rodada (pools da StonkFun ordenadas por volume 24h), mesmas metas e travas.
+try:
+    gk = http("https://api.geckoterminal.com/api/v2/networks/solana/dexes/stonkfun/pools?sort=h24_volume_usd_desc&include=base_token,quote_token") or {}
+    inc = {x["id"]: x["attributes"] for x in gk.get("included", [])}
+    sf = est.setdefault("stonkfun", {})
+    for d in gk.get("data", []):
+        a, r = d["attributes"], d["relationships"]
+        bid = r["base_token"]["data"]["id"]; b = inc.get(bid, {}); qq = inc.get(r["quote_token"]["data"]["id"], {})
+        criada = dt.datetime.fromisoformat(a["pool_created_at"].replace("Z", "+00:00")).timestamp()
+        idade_h = (agora - criada) / H
+        v1, v24 = float(a["volume_usd"]["h1"] or 0), float(a["volume_usd"]["h24"] or 0)
+        liq, fdv = float(a.get("reserve_in_usd") or 0), float(a.get("fdv_usd") or 0)
+        reg = sf.setdefault(a["address"], {"avisos": [], "sym": b.get("symbol", "?"), "t0": criada})
+        reg["max1h"] = max(reg.get("max1h", 0), v1); reg["max24"] = max(reg.get("max24", 0), v24)
+        vivo = liq >= MIN_LIQ and fdv >= MIN_MERCADO
+        for chave, lim, tit in NIVEIS:
+            val = v1 if chave == "vol1h" else v24
+            if val >= lim and chave not in reg["avisos"] and idade_h < AVISA_ATE_H:
+                if not vivo: reg["barrado"] = 1; continue
+                reg["avisos"].append(chave)
+                meme_mint = bid.split("_", 1)[-1]
+                dl = dlmm_do_meme(meme_mint)
+                msgs.append("\n".join([
+                    f"{tit}: {b.get('symbol', '?')} / {qq.get('symbol', '?')}  [StonkFun → vai p/ Raydium, não PumpSwap]",
+                    f"volume 1h {usd(v1)} · 24h {usd(v24)} · liquidez {usd(liq)} · valor de mercado {usd(fdv)} · {idade_h:.1f}h de vida",
+                    f"https://www.geckoterminal.com/solana/pools/{a['address']}",
+                    "DLMM do meme na Meteora: " + ("; ".join(f"{n} {usd(l)}" for n, l in dl) if dl else "NENHUMA ainda")]))
+    for k in [k for k, x in sf.items() if agora - x.get("t0", agora) > 7 * 86400]: del sf[k]   # registro curto (7 dias)
+except Exception as e:
+    print(f"StonkFun: leitura falhou ({e}) — segue sem", file=sys.stderr)
+
 # ---------------- resumo semanal (segunda, ~9h de Brasília)
 agora_utc = dt.datetime.fromtimestamp(agora, dt.timezone.utc)
 if args.forcar_resumo or (agora_utc.weekday() == 0 and agora_utc.hour == 12 and agora - est["resumo"]["ultimo"] > 2 * 86400):
