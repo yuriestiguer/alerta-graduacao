@@ -148,8 +148,12 @@ def mensagem(titulo, pl, q, p):
 def telegram(txt):
     tok, chat = os.environ.get("TELEGRAM_BOT_TOKEN"), os.environ.get("TELEGRAM_CHAT_ID")
     if not (tok and chat): print("[sem TELEGRAM_*: não enviado]"); return
+    # 25/11 (pedido do Yuri): só o ✅ PASSA toca; o resto chega em silêncio. Cabeçalho no topo p/ aparecer na prévia do iPhone.
+    passa = "✅ PASSA NO FILTRO" in txt
+    if passa: txt = "🚨 ✅ PASSA NO FILTRO — vale olhar agora\n" + txt
     http(f"https://api.telegram.org/bot{tok}/sendMessage",
-         json.dumps({"chat_id": chat, "text": txt, "disable_web_page_preview": True}).encode())
+         json.dumps({"chat_id": chat, "text": txt, "disable_web_page_preview": True,
+                     "disable_notification": not passa}).encode())
 
 # ---------------- estado
 est = json.load(open(EST, encoding="utf-8")) if os.path.exists(EST) else {"quotes": {}, "pools": {}}
